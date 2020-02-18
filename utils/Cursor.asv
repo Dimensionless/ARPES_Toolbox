@@ -1,0 +1,143 @@
+classdef Cursor < handle
+    % Cursor object can be constructed by:
+    % 1. hCursor = Cursor(Axes)
+    % 2. hCursor = Cursor(Axes,posX,posY)
+    
+    properties ( Access = private )        % hierachy
+        hParent % should be an axes class
+        hCrosshair
+        hCursorX
+        hCursorY
+    end
+    
+    properties (SetObservable, AbortSet)
+        % data 
+        Position
+    end
+    
+    methods
+        function obj = Cursor( Parent, varargin )
+            % Constructor
+            assert(isa(Parent,'matlab.graphics.axis.Axes'),'Parent should be an axes');
+            obj.hParent = Parent;
+            
+            % initiate handles
+            obj.initiateHandles();
+            obj.setCallbacks();
+            % handles listen to the position property
+            addlistener(obj,'Position','PostSet',@obj.updateHandles);
+            % initiate position
+            if (nargin < 2)
+                obj.Position = [Parent.XLim(1),Parent.YLim(1)];
+            else 
+                assert( nargin == 3, 'Input Error');
+                obj.Position = [varargin{1},varargin{2}];
+            end
+        end
+        
+        function set.Position(obj, NewCursor)
+            XLim = obj.hParent.XLim;
+            YLim = obj.hParent.YLim;
+            X = NewCursor(1);
+            Y = NewCursor(2);
+            % check if the new position is out of range 
+            if X < XLim(1)
+                X = XLim(1);
+            elseif X > XLim(2)
+                X = XLim(2);
+            end
+            if Y < YLim(1)
+                Y = YLim(1);
+            elseif Y > YLim(2)
+                Y = YLim(2);
+            end
+            obj.Position = [X, Y];
+        end
+        
+        function obj = initiateHandles(obj)
+            hAxes = obj.hParent;
+            XLim = hAxes.XLim;
+            YLim = hAxes.YLim;
+            hold (hAxes, 'on');
+            obj.hCursorX = line( [XLim(1) XLim(1)], YLim, ...
+                'Parent', hAxes, ...
+                'Marker', 'none',...
+                'LineWidth', 0.5, ...
+                'Color', 'r', ...
+                'Tag', 'lineCursorX');
+            obj.hCursorY = line( XLim, [YLim(1), YLim(1)], ...
+                'Parent', hAxes, ...
+                'Marker', 'none',...
+                'LineWidth', 0.5, ...
+                'Color', 'r', ...
+                'Tag', 'lineCursorY');
+            obj.hCrosshair = plot( hAxes,...
+                XLim(1), YLim(1),...
+                'Marker', 'square',...
+                'MarkerSize', 10,...
+                'LineWidth', 0.5, ...
+                'MarkerFaceColor', 'none',...
+                'Color', 'r', ...
+                'Tag', 'pointCrosshair' );
+            hold (hAxes, 'off');
+        end
+        
+        function updateHandles(obj,src,~)
+            set( obj.hCrosshair, 'XData', obj.Position(1), 'YData', obj.Position(2) );
+            set( obj.hCursorX, 'XData', [obj.Position(1),obj.Position(1)] );
+            set( obj.hCursorY, 'YData', [obj.Position(2),obj.Position(2)] );
+        end
+    end
+        
+    methods
+        % callbacks
+        function obj = setCallbacks(obj)
+            obj.hCrosshair.ButtonDownFcn = @obj.crosshairButtonDownCallback;
+            obj.hCursorX.ButtonDownFcn = @obj.hCursorXButtonDownCallback;
+            obj.hCursorY.ButtonDownFcn = @obj.hCursorYButtonDownCallback;
+        end
+        
+        function crosshairButtonDownCallback(obj,src,~)
+            set(gcf,'Pointer','crosshair');
+            set(gcf,'WindowButtonUpFcn', @obj.crosshairButtonUpCallback);
+            set(gcf,'WindowButtonMotionFcn',@obj.crosshairMotionCallback);
+        end
+        
+        function crosshairButtonUpCallback(obj,src,~)
+            set(gcf,'Pointer','arrow');
+            set(gcf,'WindowButtonMotionFcn',[]);
+        end
+        
+        function crosshairMotionCallback(obj,src,~)
+            hAxes = obj.hParent;
+            Position = hAxes.CurrentPoint(1,1:2);
+            Position = Position(1,1:2);
+            obj.Position = Position;
+        end
+        
+        function hCursorXButtonDownCallback(obj,src,~)
+            set(gcf,'Pointer','crosshair');
+            set(gcf,'WindowButtonUpFcn', @obj.hCursorXButtonUpCallback);
+            set(gcf,'WindowButtonMotionFcn',@obj.hCursorXMotionCallback);
+        end
+        
+        function hCursorXButtonUpCallback(obj,src,~)
+            set(gcf,'Pointer','arrow');
+            set(gcf,'WindowButtonMotionFcn',[]);
+        end
+        
+        function hCursorXMotionCallback(obj,src,~)
+            hAxes = obj.hParent;
+            Position = hAxes.CurrentPoint(1,1:2);
+            Position = Position(1,1:2);
+            obj.Position = Position;
+        end
+    end
+    
+    methods( Static )
+        function tf = checkVarargin(varargin)
+            assert(isa(Parent,'matlab.graphics.axis.Axes'))
+        end
+    end
+    
+end
